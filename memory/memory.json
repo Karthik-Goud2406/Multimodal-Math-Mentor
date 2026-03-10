@@ -5,5 +5,10 @@
     "topic": "calculus",
     "solution": "\nThe derivative of x^2 + 3x with respect to x is 2x + 3.",
     "verification": "\ncorrect\n\n\nThe proposed solution is correct. The derivative of x^2 with respect to x is 2x, and the derivative of 3x with respect to x is 3. Therefore, the sum of these derivatives is 2x + 3, which is the correct derivative of the function x^2 + 3x."
+  },
+  {
+    "question": "What is the derivative of x^2?",
+    "ai_answer": "It is 2x.",
+    "human_correction": "Wait, don't forget it's just 2x. Verified."
   }
 ]
