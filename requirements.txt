@@ -5,11 +5,7 @@ langchain-huggingface
 sentence-transformers
 faiss-cpu
 sympy
-easyocr
 opencv-python-headless
-openai-whisper
 pypdf
-audiorecorder
 requests
-numpy<2
-torch==2.2.2
+numpy
