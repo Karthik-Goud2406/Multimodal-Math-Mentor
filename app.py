@@ -19,7 +19,7 @@ from rag.retriever import retrieve_context
 from memory.memory_manager import save_memory, retrieve_past_solutions
 
 # local LLM warmup
-from utils.llm import call_llm# ---------------------------------------------------
+from utils.llm import call_llm # ---------------------------------------------------
 # PAGE CONFIG
 # ---------------------------------------------------
 
