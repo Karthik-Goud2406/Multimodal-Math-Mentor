@@ -1,38 +1,4 @@
 
-# from utils.llm import call_llm
-# import json
-
-
-# def parse_question(question):
-
-#     prompt = f"""
-# Convert this math problem into JSON:
-
-# {question}
-
-# Return fields:
-# problem_text
-# topic
-# variables
-# constraints
-# needs_clarification
-# """
-
-#     output = call_llm(prompt)
-
-#     try:
-#         parsed = json.loads(output)
-#     except:
-#         parsed = {
-#             "problem_text": question,
-#             "topic": "unknown",
-#             "variables": [],
-#             "constraints": [],
-#             "needs_clarification": True
-#         }
-
-#     return parsed
-
 
 def parse_question(question):
 
