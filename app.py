@@ -16,7 +16,7 @@ from agents.explainer_agent import explain_solution
 
 # rag + memory
 from rag.retriever import retrieve_context
-from memory.memory_manager import save_memory
+from memory.memory_manager import save_memory, retrieve_past_solutions
 
 # local LLM warmup
 from utils.llm import call_llm# ---------------------------------------------------
@@ -171,6 +171,14 @@ if st.button("Solve"):
     })
 
     # ----------------------------
+    # PARSER HITL (Ambiguity Check)
+    # ----------------------------
+    if parsed.get("needs_clarification"):
+        st.error("⚠️ The math problem is ambiguous, incomplete, or illegible.")
+        st.warning("Parser feedback: Please clarify the question using the text box above.")
+        st.stop()
+
+    # ----------------------------
     # ROUTER AGENT
     # ----------------------------
 
@@ -196,11 +204,26 @@ if st.button("Solve"):
     })
 
     # ----------------------------
+    # MEMORY RETRIEVAL (Self-Learning)
+    # ----------------------------
+    
+    with st.spinner("Checking memory for similar past problems..."):
+        past_memory_context = retrieve_past_solutions(parsed["problem_text"])
+        
+    if past_memory_context:
+        agent_trace.append({
+            "agent": "Memory Manager",
+            "output": f"Found useful past memory:\n{past_memory_context}"
+        })
+        context += f"\n\n[PAST MEMORY/CORRECTION]\n{past_memory_context}"
+
+
+    # ----------------------------
     # SOLVER
     # ----------------------------
 
     with st.spinner("Solving problem..."):
-        answer = solve_problem(parsed["problem_text"], docs)
+        answer = solve_problem(parsed["problem_text"], context) # Pass context directly
 
     agent_trace.append({
         "agent": "Solver",
@@ -241,17 +264,17 @@ if st.button("Solve"):
 
         st.warning("AI is unsure. Please review.")
 
-        correction = st.text_area("Provide corrected answer")
+        correction = st.text_input("Provide corrected answer (Reviewer Intervention)", key="unsure_correction")
 
-        if st.button("Submit correction"):
+        if st.button("Submit correction", key="btn_unsure_corr"):
 
             save_memory({
-                "question": question,
+                "question": parsed["problem_text"],
                 "ai_answer": answer,
                 "human_correction": correction
             })
 
-            st.success("Correction saved")
+            st.success("Correction saved to Memory!")
 
     # ----------------------------
     # EXPLAINER
@@ -306,9 +329,31 @@ if st.button("Solve"):
     # ------------------------------------------------
 
     save_memory({
-    "question": str(question),
-    "parsed": str(parsed),
-    "topic": str(topic),
-    "solution": str(answer),
-    "verification": str(verification)
-   })
+        "question": str(question),
+        "parsed": str(parsed),
+        "topic": str(topic),
+        "solution": str(answer),
+        "verification": str(verification)
+    })
+
+    # ------------------------------------------------
+    # EXPLICIT FEEDBACK BUTTONS (HITL)
+    # ------------------------------------------------
+
+    st.subheader("Was this helpful?")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("✅ Correct"):
+            st.success("Thanks for the feedback! Marked as a successful solve in memory.")
+    with col2:
+        if st.button("❌ Incorrect"):
+            st.error("Sorry! Please provide the correct steps so I can learn.")
+            final_correction = st.text_input("Correct Answer/Steps:", key="final_correction")
+            if st.button("Learn Correction", key="btn_learn"):
+                save_memory({
+                    "question": parsed["problem_text"],
+                    "ai_answer": answer,
+                    "human_correction": final_correction
+                })
+                st.success("Learned! I'll use this pattern next time.")
