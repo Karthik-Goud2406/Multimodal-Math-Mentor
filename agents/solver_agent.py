@@ -1,0 +1,59 @@
+ 
+
+from utils.llm import call_llm
+from tools.math_solver import solve_derivative
+
+
+def solve_problem(problem, retrieved_docs):
+
+    problem_lower = problem.lower()
+
+    # --------------------------------------------------
+    # 1️⃣ Try symbolic math first (FAST)
+    # --------------------------------------------------
+
+    if "derivative" in problem_lower:
+
+        try:
+            expression = problem_lower.split("of")[-1].strip()
+
+            symbolic_result = solve_derivative(expression)
+
+            if symbolic_result:
+                return str(symbolic_result)
+
+        except Exception:
+            pass
+
+    # --------------------------------------------------
+    # 2️⃣ Use top retrieved context
+    # --------------------------------------------------
+
+    context = ""
+
+    if retrieved_docs:
+        context = str(retrieved_docs[0])
+
+    # --------------------------------------------------
+    # 3️⃣ Small prompt for faster LLM inference
+    # --------------------------------------------------
+
+    prompt = f"""
+You are a math solver.
+
+Problem:
+{problem}
+git init
+Relevant rule:
+{context}
+
+Return ONLY the final answer.
+"""
+
+    # --------------------------------------------------
+    # 4️⃣ Call local LLM
+    # --------------------------------------------------
+
+    result = call_llm(prompt)
+
+    return result
