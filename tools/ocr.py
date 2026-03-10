@@ -11,12 +11,6 @@ import streamlit as st
 def load_ocr_reader():
     return easyocr.Reader(["en"], gpu=False)
 
-@st.cache_resource
-def load_ocr():
-    import easyocr
-    return easyocr.Reader(['en'])
-
-
 # -------------------------------------------------
 # Image preprocessing (faster OCR)
 # -------------------------------------------------
