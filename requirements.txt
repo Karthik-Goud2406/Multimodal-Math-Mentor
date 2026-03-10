@@ -9,3 +9,4 @@ opencv-python-headless
 pypdf
 requests
 numpy
+streamlit-audiorecorder
