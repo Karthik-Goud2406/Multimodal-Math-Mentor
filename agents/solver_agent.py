@@ -43,7 +43,7 @@ You are a math solver.
 
 Problem:
 {problem}
-git init
+
 Relevant rule:
 {context}
 
