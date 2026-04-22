@@ -1,4 +1,4 @@
-
+```python
 import streamlit as st
 import tempfile
 from audiorecorder import audiorecorder
@@ -19,7 +19,10 @@ from rag.retriever import retrieve_context
 from memory.memory_manager import save_memory, retrieve_past_solutions
 
 # local LLM warmup
-from utils.llm import call_llm # ---------------------------------------------------
+from utils.llm import call_llm
+
+
+# ---------------------------------------------------
 # PAGE CONFIG
 # ---------------------------------------------------
 
@@ -35,16 +38,34 @@ The AI will solve it step-by-step using a multi-agent pipeline.
 )
 
 # ---------------------------------------------------
+# SESSION STATE (FIX FOR DISAPPEARING ISSUE)
+# ---------------------------------------------------
+
+if "answer" not in st.session_state:
+    st.session_state.answer = None
+
+if "explanation" not in st.session_state:
+    st.session_state.explanation = None
+
+if "verification" not in st.session_state:
+    st.session_state.verification = None
+
+if "agent_trace" not in st.session_state:
+    st.session_state.agent_trace = []
+
+if "docs" not in st.session_state:
+    st.session_state.docs = []
+
+
+# ---------------------------------------------------
 # MODEL WARMUP
 # ---------------------------------------------------
 
 if "model_loaded" not in st.session_state:
-
     try:
         call_llm("warmup")
     except:
         pass
-
     st.session_state.model_loaded = True
 
 
@@ -69,7 +90,6 @@ question = ""
 # ---------------------------------------------------
 
 if mode == "Text Question":
-
     question = st.text_input(
         "Enter your math question",
         key="text_input"
@@ -90,7 +110,6 @@ if mode == "Image Upload":
     if file:
 
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
-
             tmp.write(file.read())
             path = tmp.name
 
@@ -159,10 +178,6 @@ if st.button("Solve"):
 
     agent_trace = []
 
-    # ----------------------------
-    # PARSER AGENT
-    # ----------------------------
-
     parsed = parse_question(question)
 
     agent_trace.append({
@@ -170,17 +185,10 @@ if st.button("Solve"):
         "output": parsed
     })
 
-    # ----------------------------
-    # PARSER HITL (Ambiguity Check)
-    # ----------------------------
     if parsed.get("needs_clarification"):
         st.error("⚠️ The math problem is ambiguous, incomplete, or illegible.")
         st.warning("Parser feedback: Please clarify the question using the text box above.")
         st.stop()
-
-    # ----------------------------
-    # ROUTER AGENT
-    # ----------------------------
 
     topic = route_problem(parsed["problem_text"])
 
@@ -188,10 +196,6 @@ if st.button("Solve"):
         "agent": "Router Agent",
         "output": topic
     })
-
-    # ----------------------------
-    # RETRIEVER
-    # ----------------------------
 
     with st.spinner("Retrieving knowledge..."):
         docs = retrieve_context(parsed["problem_text"])
@@ -203,13 +207,9 @@ if st.button("Solve"):
         "output": docs
     })
 
-    # ----------------------------
-    # MEMORY RETRIEVAL (Self-Learning)
-    # ----------------------------
-    
     with st.spinner("Checking memory for similar past problems..."):
         past_memory_context = retrieve_past_solutions(parsed["problem_text"])
-        
+
     if past_memory_context:
         agent_trace.append({
             "agent": "Memory Manager",
@@ -217,22 +217,13 @@ if st.button("Solve"):
         })
         context += f"\n\n[PAST MEMORY/CORRECTION]\n{past_memory_context}"
 
-
-    # ----------------------------
-    # SOLVER
-    # ----------------------------
-
     with st.spinner("Solving problem..."):
-        answer = solve_problem(parsed["problem_text"], context) # Pass context directly
+        answer = solve_problem(parsed["problem_text"], context)
 
     agent_trace.append({
         "agent": "Solver",
         "output": answer
     })
-
-    # ----------------------------
-    # VERIFIER
-    # ----------------------------
 
     verification = verify_solution(parsed["problem_text"], answer)
 
@@ -240,45 +231,6 @@ if st.button("Solve"):
         "agent": "Verifier",
         "output": verification
     })
-
-    # ----------------------------
-    # CONFIDENCE
-    # ----------------------------
-
-    st.subheader("Confidence")
-
-    if "correct" in verification.lower():
-        st.success("High confidence")
-
-    elif "incorrect" in verification.lower():
-        st.error("Low confidence")
-
-    else:
-        st.warning("Needs human review")
-
-    # ----------------------------
-    # HUMAN IN THE LOOP
-    # ----------------------------
-
-    if "unsure" in verification.lower():
-
-        st.warning("AI is unsure. Please review.")
-
-        correction = st.text_input("Provide corrected answer (Reviewer Intervention)", key="unsure_correction")
-
-        if st.button("Submit correction", key="btn_unsure_corr"):
-
-            save_memory({
-                "question": parsed["problem_text"],
-                "ai_answer": answer,
-                "human_correction": correction
-            })
-
-            st.success("Correction saved to Memory!")
-
-    # ----------------------------
-    # EXPLAINER
-    # ----------------------------
 
     explanation = explain_solution(
         parsed["problem_text"],
@@ -291,42 +243,12 @@ if st.button("Solve"):
         "output": explanation
     })
 
-    # ------------------------------------------------
-    # DISPLAY RESULTS
-    # ------------------------------------------------
-
-    st.subheader("Final Answer")
-    st.write(answer)
-
-    st.subheader("Explanation")
-    st.write(explanation)
-
-    st.subheader("Verification")
-    st.write(verification)
-
-    # ------------------------------------------------
-    # RETRIEVED KNOWLEDGE
-    # ------------------------------------------------
-
-    st.subheader("Retrieved Knowledge")
-
-    for d in docs:
-        st.write(d)
-
-    # ------------------------------------------------
-    # AGENT TRACE
-    # ------------------------------------------------
-
-    st.subheader("Agent Trace")
-
-    for step in agent_trace:
-
-        with st.expander(step["agent"]):
-            st.write(step["output"])
-
-    # ------------------------------------------------
-    # MEMORY
-    # ------------------------------------------------
+    # ✅ STORE RESULTS (KEY FIX)
+    st.session_state.answer = answer
+    st.session_state.explanation = explanation
+    st.session_state.verification = verification
+    st.session_state.agent_trace = agent_trace
+    st.session_state.docs = docs
 
     save_memory({
         "question": str(question),
@@ -336,24 +258,28 @@ if st.button("Solve"):
         "verification": str(verification)
     })
 
-    # ------------------------------------------------
-    # EXPLICIT FEEDBACK BUTTONS (HITL)
-    # ------------------------------------------------
 
-    st.subheader("Was this helpful?")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("✅ Correct"):
-            st.success("Thanks for the feedback! Marked as a successful solve in memory.")
-    with col2:
-        if st.button("❌ Incorrect"):
-            st.error("Sorry! Please provide the correct steps so I can learn.")
-            final_correction = st.text_input("Correct Answer/Steps:", key="final_correction")
-            if st.button("Learn Correction", key="btn_learn"):
-                save_memory({
-                    "question": parsed["problem_text"],
-                    "ai_answer": answer,
-                    "human_correction": final_correction
-                })
-                st.success("Learned! I'll use this pattern next time.")
+# ---------------------------------------------------
+# DISPLAY RESULTS (OUTSIDE BUTTON)
+# ---------------------------------------------------
+
+if st.session_state.answer:
+
+    st.subheader("Final Answer")
+    st.write(st.session_state.answer)
+
+    st.subheader("Explanation")
+    st.write(st.session_state.explanation)
+
+    st.subheader("Verification")
+    st.write(st.session_state.verification)
+
+    st.subheader("Retrieved Knowledge")
+    for d in st.session_state.docs:
+        st.write(d)
+
+    st.subheader("Agent Trace")
+    for step in st.session_state.agent_trace:
+        with st.expander(step["agent"]):
+            st.write(step["output"])
+```
