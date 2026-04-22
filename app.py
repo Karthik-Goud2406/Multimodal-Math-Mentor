@@ -25,11 +25,11 @@ from memory.memory_manager import save_memory, retrieve_past_solutions
 
 from utils.llm import call_llm
 
-# ---------------------------------------------------
+# -----------------------------
 
 # PAGE CONFIG
 
-# ---------------------------------------------------
+# -----------------------------
 
 st.set_page_config(page_title="Multimodal Math Mentor", layout="wide")
 
@@ -40,11 +40,11 @@ Upload an image, speak, or type a math question.
 The AI will solve it step-by-step using a multi-agent pipeline.
 """)
 
-# ---------------------------------------------------
+# -----------------------------
 
-# SESSION STATE
+# SESSION STATE (FIXED)
 
-# ---------------------------------------------------
+# -----------------------------
 
 if "answer" not in st.session_state:
 st.session_state.answer = None
@@ -61,11 +61,11 @@ st.session_state.agent_trace = []
 if "docs" not in st.session_state:
 st.session_state.docs = []
 
-# ---------------------------------------------------
+# -----------------------------
 
 # MODEL WARMUP
 
-# ---------------------------------------------------
+# -----------------------------
 
 if "model_loaded" not in st.session_state:
 try:
@@ -74,11 +74,11 @@ except:
 pass
 st.session_state.model_loaded = True
 
-# ---------------------------------------------------
+# -----------------------------
 
 # INPUT MODE
 
-# ---------------------------------------------------
+# -----------------------------
 
 mode = st.radio(
 "Choose Input Mode",
@@ -87,11 +87,11 @@ mode = st.radio(
 
 question = ""
 
-# ---------------------------------------------------
+# -----------------------------
 
 # TEXT INPUT + MIC
 
-# ---------------------------------------------------
+# -----------------------------
 
 if mode == "Text Question":
 
@@ -150,11 +150,11 @@ question = st.text_input(
 )
 ```
 
-# ---------------------------------------------------
+# -----------------------------
 
 # IMAGE INPUT
 
-# ---------------------------------------------------
+# -----------------------------
 
 elif mode == "Image Upload":
 
@@ -174,11 +174,11 @@ if file:
     question = st.text_area("Edit OCR text", text)
 ```
 
-# ---------------------------------------------------
+# -----------------------------
 
 # AUDIO INPUT
 
-# ---------------------------------------------------
+# -----------------------------
 
 elif mode == "Audio Upload":
 
@@ -206,11 +206,11 @@ if uploaded_audio:
     question = st.text_area("Edit transcript", transcript)
 ```
 
-# ---------------------------------------------------
+# -----------------------------
 
 # SOLVE BUTTON
 
-# ---------------------------------------------------
+# -----------------------------
 
 if st.button("Solve"):
 
@@ -255,13 +255,13 @@ save_memory({
 })
 ```
 
-# ---------------------------------------------------
+# -----------------------------
 
-# DISPLAY RESULTS 
+# DISPLAY RESULTS
 
-# ---------------------------------------------------
+# -----------------------------
 
-if st.session_state.answer:
+if st.session_state.answer is not None:
 
 ```
 st.subheader("Final Answer")
