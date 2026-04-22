@@ -1,4 +1,4 @@
-```python
+
 import streamlit as st
 import tempfile
 from audiorecorder import audiorecorder
@@ -282,4 +282,4 @@ if st.session_state.answer:
     for step in st.session_state.agent_trace:
         with st.expander(step["agent"]):
             st.write(step["output"])
-```
+
