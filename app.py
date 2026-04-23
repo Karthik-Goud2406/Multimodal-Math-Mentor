@@ -33,12 +33,11 @@ from utils.llm import call_llm
 st.set_page_config(page_title="Multimodal Math Mentor", layout="wide")
 
 st.title("Multimodal Math Mentor")
-
 st.write("Solve math using text, voice, image, or PDF.")
 
 # -----------------------------
 
-# SESSION STATE
+# SESSION STATE (FIXED)
 
 # -----------------------------
 
@@ -193,7 +192,7 @@ save_memory({
 
 # -----------------------------
 
-if st.session_state.answer:
+if st.session_state.answer is not None:
 
 ```
 st.subheader("Answer")
