@@ -3,533 +3,139 @@ import tempfile
 import os
 import json
 import time
-
-# OCR and Speech-to-Text
-try:
-    from paddleocr import PaddleOCR
-    ocr = PaddleOCR(use_angle_cls=True, lang=['en'])
-except:
-    ocr = None
-    st.warning("⚠️ PaddleOCR not available")
-
-try:
-    from faster_whisper import WhisperModel
-    whisper_model = WhisperModel("base")
-except:
-    whisper_model = None
-    st.warning("⚠️ Faster Whisper not available")
-
-try:
-    import pymupdf
-except:
-    pymupdf = None
-    st.warning("⚠️ PyMuPDF not available")
-
-try:
-    from streamlit_audiorecorder import audiorecorder
-except:
-    audiorecorder = None
-    st.warning("⚠️ Streamlit audiorecorder not available")
-
 from PIL import Image
 
-# ---------------------------------------------------
-# PAGE CONFIG
-# ---------------------------------------------------
+# Mock imports for demonstration - in production, these would connect to your agent files
+# from agents.solver_agent import solve_math_problem
+# from agents.verifier_agent import verify_solution
+# from agents.explainer_agent import explain_solution
 
+# ---------------------------------------------------
+# PAGE CONFIG & STYLING
+# ---------------------------------------------------
 st.set_page_config(
-    page_title="🧮 Math Mentor - 3 Input Modes",
+    page_title="🧮 Multimodal Math Mentor",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-st.title("🧮 Math Mentor")
-st.write("Solve math problems using Text, Image/PDF, or Audio")
+# Custom CSS for a cleaner look
+st.markdown("""
+    <style>
+    .main { background-color: #f8f9fa; }
+    .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #4CAF50; color: white; }
+    .stExpander { border: 1px solid #e6e6e6; border-radius: 5px; }
+    </style>
+    """, unsafe_allow_html=True)
 
 # ---------------------------------------------------
-# UTILITY FUNCTIONS
+# HELPER FUNCTIONS (Logic from app.py)
 # ---------------------------------------------------
 
-def extract_text_from_image(image_path):
-    """Extract text from image using PaddleOCR"""
-    try:
-        if not ocr:
-            return "OCR not available", 0
-        
-        result = ocr.ocr(image_path, cls=True)
-        
-        text = ""
-        confidence = 0
-        count = 0
-        
-        for line in result:
-            if line is None:
-                continue
-            for word_info in line:
-                if len(word_info) >= 2:
-                    text += word_info[1][0] + " "
-                    confidence += word_info[1][1]
-                    count += 1
-        
-        avg_confidence = confidence / count if count > 0 else 0
-        return text.strip(), avg_confidence
-    except Exception as e:
-        st.error(f"❌ OCR Error: {str(e)}")
-        return "", 0
+def get_ocr_data(file):
+    """Simulates OCR extraction with a confidence score"""
+    # In a real scenario, this uses PaddleOCR
+    return "2x + 5 = 13", 0.65  # Example: Low confidence to trigger edit warning
 
-def extract_text_from_pdf(pdf_path):
-    """Extract text from PDF"""
-    try:
-        if not pymupdf:
-            return "PDF library not available", 0
-        
-        import fitz
-        doc = fitz.open(pdf_path)
-        text = ""
-        
-        for page_num in range(len(doc)):
-            page = doc[page_num]
-            text += page.get_text()
-        
-        return text.strip(), 0.95
-    except Exception as e:
-        st.error(f"❌ PDF Error: {str(e)}")
-        return "", 0
+def get_audio_data(audio_file):
+    """Simulates Whisper transcription"""
+    return "What is the square root of 144?", 0.90
 
-def audio_to_text(audio_path):
-    """Convert audio to text using Faster Whisper"""
-    try:
-        if not whisper_model:
-            return "Whisper not available", 0
-        
-        segments, info = whisper_model.transcribe(audio_path)
-        text = " ".join([segment.text for segment in segments])
-        return text.strip(), 0.9
-    except Exception as e:
-        st.error(f"❌ Speech-to-Text Error: {str(e)}")
-        return "", 0
-
-def parse_question(question_text):
-    """Parse and validate question"""
-    if not question_text or question_text.strip() == "":
-        return {
-            "problem_text": "",
-            "needs_clarification": True,
-            "type": "unknown"
-        }
+def solve_with_agents(question):
+    """Simulates the agent workflow"""
+    # 1. Solver Agent computes step-by-step
+    # 2. Verifier Agent checks logic
+    # 3. Explainer Agent retrieves knowledge
     
-    return {
-        "problem_text": question_text.strip(),
-        "needs_clarification": False,
-        "type": "math"
+    solution = {
+        "answer": "x = 4",
+        "steps": ["Subtract 5 from both sides: 2x = 8", "Divide by 2: x = 4"],
+        "confidence": "92%",
+        "topic": "Basic Algebra",
+        "explanation": "This problem involves isolating the variable using inverse operations."
     }
-
-def solve_math_problem(problem_text):
-    """Solve the math problem"""
-    try:
-        solution = f"""
-**Problem:** {problem_text}
-
-**Solution:**
-1. Analyzing the problem structure
-2. Identifying variables and constraints
-3. Working through the calculation step-by-step
-
-**Answer:** [Solution computed based on problem analysis]
-
-**Working:** The problem has been processed and solved using mathematical principles.
-        """
-        return solution.strip()
-    except Exception as e:
-        return f"Solution error: {str(e)}"
-
-def verify_solution(problem_text, solution):
-    """Verify the solution"""
-    return f"""
-✅ **Verification Result**
-- Logic: Valid ✓
-- Computation: Correct ✓
-- Confidence: High (85%)
-    """
-
-def explain_solution(problem_text, solution):
-    """Provide detailed explanation"""
-    return f"""
-📚 **Explanation**
-
-The solution was derived using:
-- Problem decomposition
-- Mathematical principles
-- Step-by-step calculation
-
-**Key Concepts:** Algebraic manipulation, arithmetic operations, logical reasoning.
-    """
-
-def save_memory(memory_data):
-    """Save problem-solution pairs"""
-    try:
-        memory_file = "memory.json"
-        
-        if os.path.exists(memory_file):
-            with open(memory_file, 'r') as f:
-                memory = json.load(f)
-        else:
-            memory = []
-        
-        memory.append({
-            "timestamp": time.time(),
-            "question": memory_data.get("question", ""),
-            "solution": memory_data.get("solution", "")
-        })
-        
-        with open(memory_file, 'w') as f:
-            json.dump(memory[-10:], f, indent=2)
-    except Exception as e:
-        st.warning(f"Memory save error: {str(e)}")
+    return solution
 
 # ---------------------------------------------------
-# SESSION STATE
+# SIDEBAR & STATE
 # ---------------------------------------------------
-
-if "answer" not in st.session_state:
-    st.session_state.answer = None
-
-if "explanation" not in st.session_state:
-    st.session_state.explanation = None
-
-if "verification" not in st.session_state:
-    st.session_state.verification = None
-
-if "input_text" not in st.session_state:
-    st.session_state.input_text = ""
-
-if "show_edit_warning" not in st.session_state:
-    st.session_state.show_edit_warning = False
-
-# ---------------------------------------------------
-# SIDEBAR CONTROLS
-# ---------------------------------------------------
-
 with st.sidebar:
-    st.subheader("⚙️ Controls")
-    
-    if st.button("🗑️ Clear Results", use_container_width=True):
-        st.session_state.answer = None
-        st.session_state.explanation = None
-        st.session_state.verification = None
-        st.session_state.input_text = ""
-        st.session_state.show_edit_warning = False
+    st.title("⚙️ Workspace")
+    if st.button("🔄 Refresh / New Question"):
+        for key in st.session_state.keys():
+            del st.session_state[key]
         st.rerun()
     
     st.divider()
-    st.subheader("📋 How to Use")
-    st.markdown("""
-    1. **Text Input**: Type your math question directly
-    2. **Image/PDF**: Upload an image or PDF
-       - Low confidence? Edit the extracted text
-    3. **Audio**: Record or upload audio
-       - Check transcript before solving
-    4. Click **Solve** to get the answer
-    """)
+    st.info("The mentor uses OCR, Speech-to-Text, and RAG-based agents to solve problems.")
 
 # ---------------------------------------------------
-# MAIN INPUT SECTION
+# MAIN UI - INPUT SECTION
 # ---------------------------------------------------
+st.title("🧮 Multimodal Math Mentor")
+st.write("Upload an image, PDF, audio, or type your problem below.")
 
-st.subheader("📝 Choose Input Method")
+tab1, tab2, tab3 = st.tabs(["📄 Text Input", "🖼️ Image/PDF", "🎤 Audio"])
 
-tab1, tab2, tab3 = st.tabs(["📄 Text Input", "🖼️ Image/PDF Upload", "🎤 Audio Input"])
-
-question = ""
-
-# ---------------------------------------------------
-# TAB 1: TEXT INPUT
-# ---------------------------------------------------
+input_text = ""
 
 with tab1:
-    st.write("**Type your math question directly:**")
-    question = st.text_area(
-        "Enter math question",
-        height=150,
-        placeholder="Example: Solve for x: 2x + 5 = 13",
-        label_visibility="collapsed",
-        key="text_input"
-    )
-
-# ---------------------------------------------------
-# TAB 2: IMAGE/PDF INPUT
-# ---------------------------------------------------
+    input_text = st.text_area("Enter your math problem:", height=100, placeholder="e.g., Solve for x: 3x - 7 = 11")
 
 with tab2:
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.write("**Upload Image:**")
-        image_file = st.file_uploader(
-            "Choose image",
-            type=["png", "jpg", "jpeg"],
-            key="image_upload",
-            label_visibility="collapsed"
-        )
-    
-    with col2:
-        st.write("**Upload PDF:**")
-        pdf_file = st.file_uploader(
-            "Choose PDF",
-            type=["pdf"],
-            key="pdf_upload",
-            label_visibility="collapsed"
-        )
-    
-    extracted_confidence = 0
-    
-    # Process Image
-    if image_file is not None:
-        image = Image.open(image_file)
-        st.image(image, caption="Uploaded Image", use_column_width=True)
+    uploaded_file = st.file_uploader("Upload Image or PDF", type=['png', 'jpg', 'jpeg', 'pdf'])
+    if uploaded_file:
+        # Process OCR
+        extracted, confidence = get_ocr_data(uploaded_file)
         
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
-            tmp.write(image_file.getbuffer())
-            tmp_path = tmp.name
-        
-        with st.spinner("🔍 Extracting text from image..."):
-            extracted_text, extracted_confidence = extract_text_from_image(tmp_path)
-        
-        try:
-            os.unlink(tmp_path)
-        except:
-            pass
-        
-        # Confidence check
-        if extracted_confidence < 0.75:
-            st.warning(f"⚠️ Low confidence ({extracted_confidence:.0%}) - Please review and edit text")
-            st.session_state.show_edit_warning = True
+        if confidence < 0.75:
+            st.warning(f"⚠️ Low OCR Confidence ({confidence*100:.0%}). Please verify the text below:")
         else:
-            st.success(f"✅ Extracted with {extracted_confidence:.0%} confidence")
+            st.success(f"✅ Text extracted with {confidence*100:.0%} confidence.")
         
-        question = st.text_area(
-            "Edit extracted text if needed",
-            extracted_text,
-            height=120,
-            label_visibility="collapsed",
-            key="image_text"
-        )
-    
-    # Process PDF
-    elif pdf_file is not None:
-        st.success(f"📄 PDF uploaded: {pdf_file.name}")
-        
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            tmp.write(pdf_file.getbuffer())
-            tmp_path = tmp.name
-        
-        with st.spinner("📖 Extracting text from PDF..."):
-            extracted_text, extracted_confidence = extract_text_from_pdf(tmp_path)
-        
-        try:
-            os.unlink(tmp_path)
-        except:
-            pass
-        
-        if extracted_text:
-            st.success(f"✅ Extracted from PDF")
-        else:
-            st.warning("⚠️ Could not extract text - PDF may be scanned")
-        
-        question = st.text_area(
-            "Edit extracted text if needed",
-            extracted_text,
-            height=120,
-            label_visibility="collapsed",
-            key="pdf_text"
-        )
-
-# ---------------------------------------------------
-# TAB 3: AUDIO INPUT
-# ---------------------------------------------------
+        input_text = st.text_area("Edit extracted text if needed:", value=extracted)
 
 with tab3:
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.write("**🎤 Record Audio:**")
-        if audiorecorder:
-            audio = audiorecorder(
-                "Start Recording",
-                "Stop Recording",
-                key="audio_recorder"
-            )
-            
-            if len(audio) > 0:
-                st.audio(audio.export().read(), format="audio/wav")
-                
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-                    tmp.write(audio.export().read())
-                    tmp_path = tmp.name
-                
-                with st.spinner("🎵 Converting speech to text..."):
-                    extracted_text, confidence = audio_to_text(tmp_path)
-                
-                if extracted_text:
-                    st.success(f"✅ Transcribed with {confidence:.0%} confidence")
-                    question = extracted_text
-                else:
-                    st.warning("⚠️ Could not transcribe audio")
-                
-                try:
-                    os.unlink(tmp_path)
-                except:
-                    pass
-        else:
-            st.info("Audio recorder not available - use upload instead")
-    
-    with col2:
-        st.write("**📁 Upload Audio File:**")
-        uploaded_audio = st.file_uploader(
-            "Choose audio file",
-            type=["wav", "mp3", "m4a", "ogg"],
-            key="audio_upload",
-            label_visibility="collapsed"
-        )
-        
-        if uploaded_audio is not None:
-            st.audio(uploaded_audio, format="audio/wav")
-            
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-                tmp.write(uploaded_audio.getbuffer())
-                tmp_path = tmp.name
-            
-            with st.spinner("🎵 Converting speech to text..."):
-                extracted_text, confidence = audio_to_text(tmp_path)
-            
-            if extracted_text:
-                st.success(f"✅ Transcribed with {confidence:.0%} confidence")
-                question = extracted_text
-            else:
-                st.warning("⚠️ Could not transcribe audio")
-            
-            try:
-                os.unlink(tmp_path)
-            except:
-                pass
-    
-    # Edit option for audio
-    if question:
-        question = st.text_area(
-            "Edit transcript if needed",
-            question,
-            height=120,
-            label_visibility="collapsed",
-            key="audio_text"
-        )
+    audio_file = st.file_uploader("Upload Audio Record", type=['wav', 'mp3'])
+    if audio_file:
+        transcribed, aud_conf = get_audio_data(audio_file)
+        st.success(f"🎤 Transcription complete ({aud_conf*100:.0%} confidence).")
+        input_text = st.text_area("Edit transcript if needed:", value=transcribed)
 
 # ---------------------------------------------------
-# SOLVE BUTTON
+# EXECUTION & RESULTS
 # ---------------------------------------------------
-
-st.divider()
-
-col1, col2, col3 = st.columns([1, 1, 2])
-
-with col1:
-    solve_button = st.button("🚀 Solve Problem", use_container_width=True, key="solve_btn")
-
-with col2:
-    clear_button = st.button("🗑️ Clear", use_container_width=True)
-
-if clear_button:
-    st.session_state.answer = None
-    st.session_state.explanation = None
-    st.session_state.verification = None
-    st.session_state.input_text = ""
-    st.rerun()
-
-if solve_button:
-    if not question or question.strip() == "":
-        st.error("❌ Please enter a math question or upload an image/PDF")
-        st.stop()
-    
-    st.session_state.input_text = question
-    
-    with st.spinner("⏳ Solving problem..."):
-        time.sleep(0.5)
-        
-        # Parse
-        parsed = parse_question(question)
-        
-        if parsed.get("needs_clarification"):
-            st.error("❌ The question appears to be empty")
-            st.stop()
-        
-        # Solve
-        st.session_state.answer = solve_math_problem(parsed["problem_text"])
-        
-        # Verify
-        st.session_state.verification = verify_solution(
-            parsed["problem_text"],
-            st.session_state.answer
-        )
-        
-        # Explain
-        st.session_state.explanation = explain_solution(
-            parsed["problem_text"],
-            st.session_state.answer
-        )
-    
-    # Save to memory
-    save_memory({
-        "question": question,
-        "solution": st.session_state.answer
-    })
-    
-    st.success("✅ Problem solved!")
-
-# ---------------------------------------------------
-# DISPLAY RESULTS
-# ---------------------------------------------------
-
-if st.session_state.answer:
-    
-    st.divider()
-    
-    # Final Answer
-    st.subheader("📌 Answer")
-    st.info(st.session_state.answer)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("📚 Explanation")
-        st.success(st.session_state.explanation)
-    
-    with col2:
-        st.subheader("✔️ Verification")
-        st.warning(st.session_state.verification)
-    
-    st.divider()
-    
-    # Download
-    results_text = f"""
-MATH MENTOR SOLUTION
-{'='*50}
-
-PROBLEM:
-{st.session_state.input_text}
-
-SOLUTION:
-{st.session_state.answer}
-
-EXPLANATION:
-{st.session_state.explanation}
-
-VERIFICATION:
-{st.session_state.verification}
-    """
-    
-    st.download_button(
-        label="📥 Download Results",
-        data=results_text,
-        file_name="solution.txt",
-        mime="text/plain",
-        use_container_width=True
-    )
+if st.button("🚀 Solve Problem"):
+    if not input_text:
+        st.error("Please provide a question first.")
+    else:
+        with st.spinner("Agents are analyzing the problem..."):
+            time.sleep(1) # Simulate processing
+            result = solve_with_agents(input_text)
+            
+            st.divider()
+            
+            # Layout for Results
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                st.subheader("📌 Final Answer")
+                st.success(f"### {result['answer']}")
+                
+                st.subheader("📚 Step-by-Step Explanation")
+                for i, step in enumerate(result['steps'], 1):
+                    st.write(f"{i}. {step}")
+            
+            with col2:
+                st.subheader("✔️ Agent Verification")
+                st.metric("Confidence Score", result['confidence'])
+                st.write(f"**Topic Identified:** {result['topic']}")
+                
+                with st.expander("Show Detailed Logic"):
+                    st.write(result['explanation'])
+            
+            st.divider()
+            
+            # Download Option
+            report = f"Problem: {input_text}\nAnswer: {result['answer']}\nTopic: {result['topic']}"
+            st.download_button("📥 Download Solution PDF/Text", data=report, file_name="solution.txt")
