@@ -19,7 +19,7 @@ from agents.explainer_agent import explain_solution
 # rag + memory
 
 from rag.retriever import retrieve_context
-from memory.memory_manager import save_memory, retrieve_past_solutions
+from memory.memory_manager import save_memory
 
 # local LLM warmup
 
@@ -42,7 +42,7 @@ The AI will solve it step-by-step using a multi-agent pipeline.
 
 # -----------------------------
 
-# SESSION STATE (FIXED)
+# SESSION STATE
 
 # -----------------------------
 
@@ -99,48 +99,48 @@ if mode == "Text Question":
 st.markdown("### 🎤 Speak or Type your question")
 
 components.html("""
-    <script>
-    function startDictation() {
-        if (window.hasOwnProperty('webkitSpeechRecognition')) {
+<script>
+function startDictation() {
+    if (window.hasOwnProperty('webkitSpeechRecognition')) {
 
-            var recognition = new webkitSpeechRecognition();
-            recognition.continuous = false;
-            recognition.interimResults = false;
-            recognition.lang = "en-IN";
+        var recognition = new webkitSpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = "en-IN";
 
-            recognition.start();
+        recognition.start();
 
-            recognition.onresult = function(e) {
-                const text = e.results[0][0].transcript;
+        recognition.onresult = function(e) {
+            const text = e.results[0][0].transcript;
 
-                const inputs = window.parent.document.querySelectorAll('textarea, input');
-                inputs.forEach(input => {
-                    if (input.placeholder && input.placeholder.includes("Enter your math question")) {
-                        input.value = text;
-                        input.dispatchEvent(new Event('input', { bubbles: true }));
-                    }
-                });
-            };
+            const inputs = window.parent.document.querySelectorAll('textarea, input');
+            inputs.forEach(input => {
+                if (input.placeholder && input.placeholder.includes("Enter your math question")) {
+                    input.value = text;
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            });
+        };
 
-            recognition.onerror = function(e) {
-                recognition.stop();
-            };
-        } else {
-            alert("Speech recognition not supported");
-        }
+        recognition.onerror = function(e) {
+            recognition.stop();
+        };
+    } else {
+        alert("Speech recognition not supported");
     }
-    </script>
+}
+</script>
 
-    <button onclick="startDictation()" style="
-        background-color:#4CAF50;
-        color:white;
-        padding:10px 20px;
-        border:none;
-        border-radius:8px;
-        cursor:pointer;
-        font-size:16px;">
-        🎤 Speak
-    </button>
+<button onclick="startDictation()" style="
+    background-color:#4CAF50;
+    color:white;
+    padding:10px 20px;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+    font-size:16px;">
+    🎤 Speak
+</button>
 """, height=80)
 
 question = st.text_input(
@@ -242,7 +242,7 @@ agent_trace.append({"agent": "Solver", "output": answer})
 agent_trace.append({"agent": "Verifier", "output": verification})
 agent_trace.append({"agent": "Explainer", "output": explanation})
 
-# STORE RESULTS
+# SAVE RESULTS
 st.session_state.answer = answer
 st.session_state.explanation = explanation
 st.session_state.verification = verification
