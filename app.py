@@ -1,6 +1,7 @@
 import streamlit as st
 import tempfile
 import streamlit.components.v1 as components
+import PyPDF2
 
 # tools
 
@@ -19,7 +20,7 @@ from agents.explainer_agent import explain_solution
 from rag.retriever import retrieve_context
 from memory.memory_manager import save_memory
 
-# local LLM warmup
+# llm
 
 from utils.llm import call_llm
 
@@ -33,10 +34,7 @@ st.set_page_config(page_title="Multimodal Math Mentor", layout="wide")
 
 st.title("Multimodal Math Mentor")
 
-st.write("""
-Upload an image, speak, or type a math question.
-The AI will solve it step-by-step using a multi-agent pipeline.
-""")
+st.write("Solve math using text, voice, image, or PDF.")
 
 # -----------------------------
 
@@ -52,12 +50,6 @@ st.session_state.explanation = None
 
 if "verification" not in st.session_state:
 st.session_state.verification = None
-
-if "agent_trace" not in st.session_state:
-st.session_state.agent_trace = []
-
-if "docs" not in st.session_state:
-st.session_state.docs = []
 
 # -----------------------------
 
@@ -79,73 +71,43 @@ st.session_state.model_loaded = True
 # -----------------------------
 
 mode = st.radio(
-"Choose Input Mode",
-["Text / Voice", "Image Upload"]
+"Choose Input",
+["Text / Voice", "Image", "PDF"]
 )
 
 question = ""
 
 # -----------------------------
 
-# TEXT + VOICE (WORKING)
+# TEXT + VOICE
 
 # -----------------------------
 
 if mode == "Text / Voice":
 
 ```
-st.markdown("### 🎤 Speak or Type your question")
-
 components.html("""
 <script>
 function startDictation() {
-    if (window.hasOwnProperty('webkitSpeechRecognition')) {
+    var recognition = new webkitSpeechRecognition();
+    recognition.lang = "en-IN";
+    recognition.start();
 
-        var recognition = new webkitSpeechRecognition();
-        recognition.continuous = false;
-        recognition.interimResults = false;
-        recognition.lang = "en-IN";
-
-        recognition.start();
-
-        recognition.onresult = function(e) {
-            const text = e.results[0][0].transcript;
-
-            const inputs = window.parent.document.querySelectorAll('textarea, input');
-            inputs.forEach(input => {
-                if (input.placeholder && input.placeholder.includes("Enter your math question")) {
-                    input.value = text;
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-            });
-        };
-
-        recognition.onerror = function(e) {
-            recognition.stop();
-        };
-    } else {
-        alert("Speech not supported in this browser");
-    }
+    recognition.onresult = function(e) {
+        let text = e.results[0][0].transcript;
+        const input = window.parent.document.querySelector('input');
+        if (input) {
+            input.value = text;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    };
 }
 </script>
 
-<button onclick="startDictation()" style="
-    background:#4CAF50;
-    color:white;
-    padding:10px 20px;
-    border:none;
-    border-radius:8px;
-    cursor:pointer;
-    font-size:16px;">
-    🎤 Speak
-</button>
-""", height=80)
+<button onclick="startDictation()">🎤 Speak</button>
+""", height=70)
 
-question = st.text_input(
-    "Enter your math question",
-    key="text_input",
-    placeholder="Enter your math question"
-)
+question = st.text_input("Enter question")
 ```
 
 # -----------------------------
@@ -154,9 +116,9 @@ question = st.text_input(
 
 # -----------------------------
 
-elif mode == "Image Upload":
+elif mode == "Image":
 
-
+```
 file = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg"])
 
 if file:
@@ -165,53 +127,65 @@ if file:
         path = tmp.name
 
     text, _ = extract_text_from_image(path)
-    question = st.text_area("Edit OCR text", text)
-
+    question = st.text_area("Edit text", text)
+```
 
 # -----------------------------
 
-# SOLVE BUTTON
+# PDF INPUT
+
+# -----------------------------
+
+elif mode == "PDF":
+
+```
+file = st.file_uploader("Upload PDF", type=["pdf"])
+
+if file:
+    reader = PyPDF2.PdfReader(file)
+    text = ""
+
+    for page in reader.pages:
+        text += page.extract_text()
+
+    question = st.text_area("Extracted text", text)
+```
+
+# -----------------------------
+
+# SOLVE
 
 # -----------------------------
 
 if st.button("Solve"):
 
-
-if question.strip() == "":
-    st.warning("Please enter a question")
+```
+if not question.strip():
+    st.warning("Enter a question")
     st.stop()
 
-agent_trace = []
-
 parsed = parse_question(question)
-agent_trace.append({"agent": "Parser", "output": parsed})
 
 if parsed.get("needs_clarification"):
     st.error("Problem unclear")
     st.stop()
 
-topic = route_problem(parsed["problem_text"])
 docs = retrieve_context(parsed["problem_text"])
-
 context = "\n".join([str(d) for d in docs])
 
 answer = solve_problem(parsed["problem_text"], context)
 verification = verify_solution(parsed["problem_text"], answer)
 explanation = explain_solution(parsed["problem_text"], answer, context)
 
-agent_trace.append({"agent": "Solver", "output": answer})
-agent_trace.append({"agent": "Verifier", "output": verification})
-agent_trace.append({"agent": "Explainer", "output": explanation})
-
-# STORE
 st.session_state.answer = answer
 st.session_state.explanation = explanation
 st.session_state.verification = verification
-st.session_state.agent_trace = agent_trace
-st.session_state.docs = docs
 
-save_memory({"question": question, "solution": answer})
-
+save_memory({
+    "question": question,
+    "solution": answer
+})
+```
 
 # -----------------------------
 
@@ -221,8 +195,8 @@ save_memory({"question": question, "solution": answer})
 
 if st.session_state.answer:
 
-
-st.subheader("Final Answer")
+```
+st.subheader("Answer")
 st.write(st.session_state.answer)
 
 st.subheader("Explanation")
@@ -230,9 +204,4 @@ st.write(st.session_state.explanation)
 
 st.subheader("Verification")
 st.write(st.session_state.verification)
-
-st.subheader("Agent Trace")
-for step in st.session_state.agent_trace:
-    with st.expander(step["agent"]):
-        st.write(step["output"])
-
+```
