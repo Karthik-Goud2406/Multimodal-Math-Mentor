@@ -11,7 +11,7 @@ except ImportError:
 # CONFIG
 # --------------------------------------------------
 
-MODEL_NAME = "llama3-8b-instant"
+MODEL_NAME = "mixtral-8x7b-32768"
 
 
 def _get_client():
