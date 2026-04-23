@@ -11,7 +11,7 @@ except ImportError:
 # CONFIG
 # --------------------------------------------------
 
-MODEL_NAME = "llama-3.3-70b-versatile"
+MODEL_NAME = "llama3-8b-instant"
 
 
 def _get_client():
