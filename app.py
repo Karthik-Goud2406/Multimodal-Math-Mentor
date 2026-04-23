@@ -1,11 +1,11 @@
 import streamlit as st
 import tempfile
-import PyPDF2
-import openai
+from audiorecorder import audiorecorder
 
 # tools
 
 from tools.ocr import extract_text_from_image
+from tools.speech_to_text import audio_to_text
 
 # agents
 
@@ -26,22 +26,6 @@ from utils.llm import call_llm
 
 # -----------------------------
 
-# OPENAI CONFIG
-
-# -----------------------------
-
-client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-
-def whisper_transcribe(file_path):
-with open(file_path, "rb") as audio_file:
-transcript = client.audio.transcriptions.create(
-model="gpt-4o-mini-transcribe",
-file=audio_file
-)
-return transcript.text
-
-# -----------------------------
-
 # PAGE CONFIG
 
 # -----------------------------
@@ -49,11 +33,11 @@ return transcript.text
 st.set_page_config(page_title="Multimodal Math Mentor", layout="wide")
 
 st.title("Multimodal Math Mentor")
-st.write("Solve math using text, image, PDF, or audio (Whisper).")
+st.write("Solve math using text, image, or audio.")
 
 # -----------------------------
 
-# SESSION STATE
+# SESSION STATE (FIX)
 
 # -----------------------------
 
@@ -86,8 +70,8 @@ st.session_state.model_loaded = True
 # -----------------------------
 
 mode = st.radio(
-"Choose Input",
-["Text", "Image", "PDF", "Audio (Whisper)"]
+"Choose Input Mode",
+["Text", "Image", "Audio"]
 )
 
 question = ""
@@ -99,7 +83,7 @@ question = ""
 # -----------------------------
 
 if mode == "Text":
-question = st.text_input("Enter question")
+question = st.text_input("Enter your math question")
 
 # -----------------------------
 
@@ -118,63 +102,41 @@ if file:
         path = tmp.name
 
     text, _ = extract_text_from_image(path)
-    question = st.text_area("Edit text", text)
+    question = st.text_area("Edit OCR text", text)
 ```
 
 # -----------------------------
 
-# PDF
+# AUDIO
 
 # -----------------------------
 
-elif mode == "PDF":
+elif mode == "Audio":
 
 ```
-file = st.file_uploader("Upload PDF", type=["pdf"])
+audio = audiorecorder("Start recording", "Stop recording")
 
-if file:
-    reader = PyPDF2.PdfReader(file)
-    text = ""
+if len(audio) > 0:
+    st.audio(audio.export().read())
 
-    for page in reader.pages:
-        text += page.extract_text()
+    with open("temp_audio.wav", "wb") as f:
+        f.write(audio.export().read())
 
-    question = st.text_area("Extracted text", text)
-```
-
-# -----------------------------
-
-# AUDIO (WHISPER)
-
-# -----------------------------
-
-elif mode == "Audio (Whisper)":
-
-```
-audio_file = st.file_uploader("Upload Audio", type=["wav", "mp3", "m4a"])
-
-if audio_file:
-    with tempfile.NamedTemporaryFile(delete=False) as tmp:
-        tmp.write(audio_file.read())
-        path = tmp.name
-
-    with st.spinner("Transcribing with Whisper..."):
-        question = whisper_transcribe(path)
-
+    question = audio_to_text("temp_audio.wav")
     question = st.text_area("Transcribed text", question)
 ```
 
 # -----------------------------
 
-# SOLVE
+# SOLVE BUTTON
 
 # -----------------------------
 
 if st.button("Solve"):
 
 ```
-if not question.strip():
-    st.warning("Enter a question")
+if question.strip() == "":
+    st.warning("Please enter a question")
     st.stop()
 
 parsed = parse_question(question)
@@ -190,6 +152,7 @@ answer = solve_problem(parsed["problem_text"], context)
 verification = verify_solution(parsed["problem_text"], answer)
 explanation = explain_solution(parsed["problem_text"], answer, context)
 
+# 🔥 STORE RESULTS (KEY FIX)
 st.session_state.answer = answer
 st.session_state.explanation = explanation
 st.session_state.verification = verification
@@ -202,14 +165,14 @@ save_memory({
 
 # -----------------------------
 
-# DISPLAY
+# DISPLAY (OUTSIDE BUTTON)
 
 # -----------------------------
 
 if st.session_state.answer is not None:
 
 ```
-st.subheader("Answer")
+st.subheader("Final Answer")
 st.write(st.session_state.answer)
 
 st.subheader("Explanation")
