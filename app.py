@@ -1,7 +1,7 @@
 import streamlit as st
 import tempfile
-import streamlit.components.v1 as components
 import PyPDF2
+import openai
 
 # tools
 
@@ -26,6 +26,22 @@ from utils.llm import call_llm
 
 # -----------------------------
 
+# OPENAI CONFIG
+
+# -----------------------------
+
+client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
+def whisper_transcribe(file_path):
+with open(file_path, "rb") as audio_file:
+transcript = client.audio.transcriptions.create(
+model="gpt-4o-mini-transcribe",
+file=audio_file
+)
+return transcript.text
+
+# -----------------------------
+
 # PAGE CONFIG
 
 # -----------------------------
@@ -33,11 +49,11 @@ from utils.llm import call_llm
 st.set_page_config(page_title="Multimodal Math Mentor", layout="wide")
 
 st.title("Multimodal Math Mentor")
-st.write("Solve math using text, voice, image, or PDF.")
+st.write("Solve math using text, image, PDF, or audio (Whisper).")
 
 # -----------------------------
 
-# SESSION STATE (FIXED)
+# SESSION STATE
 
 # -----------------------------
 
@@ -71,47 +87,23 @@ st.session_state.model_loaded = True
 
 mode = st.radio(
 "Choose Input",
-["Text / Voice", "Image", "PDF"]
+["Text", "Image", "PDF", "Audio (Whisper)"]
 )
 
 question = ""
 
 # -----------------------------
 
-# TEXT + VOICE
+# TEXT
 
 # -----------------------------
 
-if mode == "Text / Voice":
-
-```
-components.html("""
-<script>
-function startDictation() {
-    var recognition = new webkitSpeechRecognition();
-    recognition.lang = "en-IN";
-    recognition.start();
-
-    recognition.onresult = function(e) {
-        let text = e.results[0][0].transcript;
-        const input = window.parent.document.querySelector('input');
-        if (input) {
-            input.value = text;
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-    };
-}
-</script>
-
-<button onclick="startDictation()">🎤 Speak</button>
-""", height=70)
-
+if mode == "Text":
 question = st.text_input("Enter question")
-```
 
 # -----------------------------
 
-# IMAGE INPUT
+# IMAGE
 
 # -----------------------------
 
@@ -131,7 +123,7 @@ if file:
 
 # -----------------------------
 
-# PDF INPUT
+# PDF
 
 # -----------------------------
 
@@ -148,6 +140,28 @@ if file:
         text += page.extract_text()
 
     question = st.text_area("Extracted text", text)
+```
+
+# -----------------------------
+
+# AUDIO (WHISPER)
+
+# -----------------------------
+
+elif mode == "Audio (Whisper)":
+
+```
+audio_file = st.file_uploader("Upload Audio", type=["wav", "mp3", "m4a"])
+
+if audio_file:
+    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        tmp.write(audio_file.read())
+        path = tmp.name
+
+    with st.spinner("Transcribing with Whisper..."):
+        question = whisper_transcribe(path)
+
+    question = st.text_area("Transcribed text", question)
 ```
 
 # -----------------------------
